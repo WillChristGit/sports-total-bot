@@ -1,0 +1,10 @@
+Game ID,Sport,Bet Type,Side,Line,Odds,Projected Value,EV,Win Probability,Confidence,Home Team,Away Team,Game Time,Reasoning
+69d971ab3826cab2feb87672c81b99cc,nba,totals,over,204.9,-117,217.7,0.0711,0.5775,0.7000,Detroit Pistons,Knicks,2026-02-07 00:43,"Projected: 217.7 vs Line: 204.9 (Diff: +12.8). Win Prob: 57.7%, EV: 7.11%. "
+c9fbb4841a8939ef25c00d8012bf66d1,nba,totals,under,223.6,-109,214.0,0.0676,0.5568,0.7000,Milwaukee Bucks,Indiana Pacers,2026-02-07 01:11,"Projected: 214.0 vs Line: 223.6 (Diff: -9.6). Win Prob: 55.7%, EV: 6.76%. "
+ca2f6578b0d06d2a06e2eb5cee12fd8e,nba,totals,under,237.2,-109,221.0,0.1121,0.5800,0.7000,Minnesota Timberwolves,New Orleans Pelicans,2026-02-07 01:11,"Projected: 221.0 vs Line: 237.2 (Diff: -16.2). Win Prob: 58.0%, EV: 11.21%. "
+ef8ae24fd705cab52010cac25b6abbba,nba,totals,under,235.2,-111,221.3,0.1025,0.5800,0.7000,Portland Trail Blazers,Memphis Grizzlies,2026-02-07 03:00,"Projected: 221.3 vs Line: 235.2 (Diff: -13.9). Win Prob: 58.0%, EV: 10.25%. "
+a54af649958eb60284f57114fdeeb472,nba,totals,under,236.0,-109,221.0,0.1121,0.5800,0.7000,Orlando Magic,Utah Jazz,2026-02-08 00:10,"Projected: 221.0 vs Line: 236.0 (Diff: -15.0). Win Prob: 58.0%, EV: 11.21%. "
+05cf7fd60949a0c52340284b261ae851,nba,totals,under,231.3,-110,221.0,0.0889,0.5704,0.7000,Atlanta Hawks,Charlotte Hornets,2026-02-08 00:40,"Projected: 221.0 vs Line: 231.3 (Diff: -10.3). Win Prob: 57.0%, EV: 8.89%. "
+e9a14346272a3fc89154cc1bf1c5da1b,nba,totals,under,228.7,-109,217.7,0.0904,0.5687,0.7000,Chicago Bulls,Denver Nuggets,2026-02-08 01:10,"Projected: 217.7 vs Line: 228.7 (Diff: -11.0). Win Prob: 56.9%, EV: 9.04%. "
+7b28a8f5733ef01c824181e1b5a42341,nba,totals,under,233.9,-110,221.0,0.1073,0.5800,0.7000,Sacramento Kings,Cleveland Cavaliers,2026-02-08 03:10,"Projected: 221.0 vs Line: 233.9 (Diff: -12.9). Win Prob: 58.0%, EV: 10.73%. "
+7b28a8f5733ef01c824181e1b5a42341,nba,spreads,away,12.3,-109,-3.5,0.0746,0.5604,0.6000,Sacramento Kings,Cleveland Cavaliers,2026-02-08 03:10,"Projected Margin: +3.5 vs Line: 12.3. Win Prob: 56.0%, EV: 7.46%. "

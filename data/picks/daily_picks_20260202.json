@@ -1,0 +1,34 @@
+[
+  {
+    "game_id": "31a26b08d3d28e056418f330c82bf472",
+    "sport": "nba",
+    "bet_type": "totals",
+    "side": "under",
+    "line": 251.1,
+    "odds": -69,
+    "projected_value": 221.3,
+    "ev": 0.4818,
+    "win_probability": 0.605,
+    "confidence": 0.7,
+    "home_team": "Memphis Grizzlies",
+    "away_team": "Minnesota Timberwolves",
+    "game_time": "2026-02-03T00:44:00+00:00",
+    "reasoning": "Projected: 221.3 vs Line: 251.1 (Diff: -29.8). Win Prob: 60.5%, EV: 48.18%. "
+  },
+  {
+    "game_id": "01033031be4b2306531dce32f69191b5",
+    "sport": "nba",
+    "bet_type": "totals",
+    "side": "under",
+    "line": 239.6,
+    "odds": -111,
+    "projected_value": 221.3,
+    "ev": 0.15,
+    "win_probability": 0.605,
+    "confidence": 0.7,
+    "home_team": "Miami Heat",
+    "away_team": "Atlanta Hawks",
+    "game_time": "2026-02-04T00:40:00+00:00",
+    "reasoning": "Projected: 221.3 vs Line: 239.6 (Diff: -18.3). Win Prob: 60.5%, EV: 15.00%. "
+  }
+]

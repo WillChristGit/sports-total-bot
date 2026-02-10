@@ -1,0 +1,3 @@
+Game ID,Sport,Bet Type,Side,Line,Odds,Projected Value,EV,Win Probability,Confidence,Home Team,Away Team,Game Time,Reasoning
+31a26b08d3d28e056418f330c82bf472,nba,totals,under,251.1,-69,221.3,0.4818,0.6050,0.7000,Memphis Grizzlies,Minnesota Timberwolves,2026-02-03 00:44,"Projected: 221.3 vs Line: 251.1 (Diff: -29.8). Win Prob: 60.5%, EV: 48.18%. "
+01033031be4b2306531dce32f69191b5,nba,totals,under,239.6,-111,221.3,0.1500,0.6050,0.7000,Miami Heat,Atlanta Hawks,2026-02-04 00:40,"Projected: 221.3 vs Line: 239.6 (Diff: -18.3). Win Prob: 60.5%, EV: 15.00%. "

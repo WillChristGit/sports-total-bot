@@ -1,0 +1,6 @@
+Game ID,Sport,Bet Type,Side,Line,Odds,Projected Value,EV,Win Probability,Confidence,Home Team,Away Team,Game Time,Reasoning
+6e1b81dfdc63af7360ee37738c1cc78f,nba,totals,under,244.3,-110,225.8,0.1129,0.5829,0.7000,Atlanta Hawks,Utah Jazz,2026-02-06 00:40,"Projected: 225.8 vs Line: 244.3 (Diff: -18.5). Win Prob: 58.3%, EV: 11.29%. "
+5a8b449155f22260aabd2f130cbbe7b1,nba,totals,over,214.5,-108,227.0,0.0873,0.5646,0.7000,Phoenix Suns,Warriors,2026-02-06 03:10,"Projected: 227.0 vs Line: 214.5 (Diff: +12.5). Win Prob: 56.5%, EV: 8.73%. "
+29d21b1015a4f76d386601af48083a64,nba,totals,under,233.8,-110,222.2,0.0710,0.5610,0.7000,Lakers,76ers,2026-02-06 03:10,"Projected: 222.2 vs Line: 233.8 (Diff: -11.6). Win Prob: 56.1%, EV: 7.10%. "
+c9fbb4841a8939ef25c00d8012bf66d1,nba,totals,under,224.5,-105,213.6,0.0895,0.5581,0.7000,Milwaukee Bucks,Indiana Pacers,2026-02-07 01:10,"Projected: 213.6 vs Line: 224.5 (Diff: -10.9). Win Prob: 55.8%, EV: 8.95%. "
+ca2f6578b0d06d2a06e2eb5cee12fd8e,nba,totals,under,235.2,-109,226.0,0.0554,0.5504,0.7000,Minnesota Timberwolves,New Orleans Pelicans,2026-02-07 01:10,"Projected: 226.0 vs Line: 235.2 (Diff: -9.2). Win Prob: 55.0%, EV: 5.54%. "

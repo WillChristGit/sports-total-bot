@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SportsTotalBot - NBA Picks</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1f2937;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --ev-high: #10b981;
+            --ev-medium: #fbbf24;
+            --ev-low: #6b7280;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(17, 24, 39, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .header-title span {
+            color: var(--ev-high);
+        }
+
+        .header-update {
+            font-size: 13px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .header-update::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: var(--ev-high);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 24px 0;
+        }
+
+        /* Results Section */
+        .results-section {
+            margin-bottom: 24px;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-value.positive {
+            color: var(--ev-high);
+        }
+
+        .stat-value.negative {
+            color: #ef4444;
+        }
+
+        .stat-value.record {
+            font-size: 28px;
+        }
+
+        /* Table Card */
+        .table-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        .picks-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .picks-table th {
+            text-align: left;
+            padding: 14px 16px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        .picks-table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
+        }
+
+        .picks-table tbody tr {
+            transition: background 0.15s ease;
+        }
+
+        .picks-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .picks-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Time Column */
+        .game-time {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        /* Teams Column */
+        .teams-cell {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .teams-cell .at {
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        /* Bet Type Badge */
+        .bet-type {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .bet-type.totals {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--ev-high);
+        }
+
+        .bet-type.spreads {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+        }
+
+        /* Side */
+        .side {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .side.over {
+            color: var(--ev-high);
+        }
+
+        .side.under {
+            color: var(--ev-medium);
+        }
+
+        /* Line */
+        .line {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Odds */
+        .odds {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        /* EV Badge */
+        .ev-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .ev-badge.high {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--ev-high);
+        }
+
+        .ev-badge.medium {
+            background: rgba(251, 191, 36, 0.15);
+            color: var(--ev-medium);
+        }
+
+        .ev-badge.low {
+            background: rgba(107, 114, 128, 0.15);
+            color: var(--ev-low);
+        }
+
+        /* Win Probability */
+        .win-prob {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .win-prob-text {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            min-width: 40px;
+        }
+
+        .prob-bar {
+            width: 60px;
+            height: 6px;
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .prob-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--ev-high), var(--ev-medium));
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        /* Units */
+        .units {
+            font-weight: 600;
+            color: var(--ev-high);
+        }
+
+        /* Loading State */
+        .loading-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--bg-tertiary);
+            border-top-color: var(--ev-high);
+            border-radius: 50%;
+            margin: 0 auto 16px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Empty State */
+        .empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-size: 16px;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 8px;
+                align-items: flex-start;
+            }
+
+            .picks-table th,
+            .picks-table td {
+                padding: 10px 12px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="header-title">
+                    SportsTotalBot <span>NBA Picks</span>
+                </div>
+                <div class="header-update" id="lastUpdate">
+                    Loading...
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Results Section -->
+            <section class="results-section">
+                <div class="results-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Record (30 days)</div>
+                        <div class="stat-value record" id="recordStat">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Win Rate</div>
+                        <div class="stat-value" id="winRateStat">--%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Units</div>
+                        <div class="stat-value" id="unitsStat">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">ROI</div>
+                        <div class="stat-value" id="roiStat">--%</div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="table-card">
+                <div class="table-wrapper">
+                    <table class="picks-table">
+                        <thead>
+                            <tr>
+                                <th>Time (ET)</th>
+                                <th>Teams</th>
+                                <th>Bet Type</th>
+                                <th>Side</th>
+                                <th>Line</th>
+                                <th>Odds</th>
+                                <th>EV</th>
+                                <th>Win Prob</th>
+                                <th>Units</th>
+                            </tr>
+                        </thead>
+                        <tbody id="picksTableBody">
+                            <!-- Loading state -->
+                            <tr>
+                                <td colspan="9">
+                                    <div class="loading-state">
+                                        <div class="loading-spinner"></div>
+                                        <div class="loading-text">Loading picks data...</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Configuration
+        const API_BASE = '/api';
+        const REFRESH_INTERVAL = 60000; // 60 seconds
+
+        // Update last update time
+        function updateLastRefreshTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+            document.getElementById('lastUpdate').textContent = `Last update: ${timeString}`;
+        }
+
+        // Get EV badge class
+        function getEVClass(ev) {
+            if (ev >= 8) return 'high';
+            if (ev >= 4) return 'medium';
+            return 'low';
+        }
+
+        // Get bet type class
+        function getBetTypeClass(type) {
+            return type.toLowerCase() === 'totals' ? 'totals' : 'spreads';
+        }
+
+        // Get side class
+        function getSideClass(side) {
+            return side.toLowerCase();
+        }
+
+        // Render picks table
+        function renderPicksTable(picks) {
+            const tbody = document.getElementById('picksTableBody');
+
+            if (!picks || picks.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">🏀</div>
+                                <div class="empty-state-text">No picks available at this time</div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            const html = picks.map(pick => `
+                <tr>
+                    <td><span class="game-time">${pick.gameTime || '--:--'}</span></td>
+                    <td><span class="teams-cell">${pick.awayTeam} <span class="at">@</span> ${pick.homeTeam}</span></td>
+                    <td><span class="bet-type ${getBetTypeClass(pick.betType)}">${pick.betType}</span></td>
+                    <td><span class="side ${getSideClass(pick.side)}">${pick.side}</span></td>
+                    <td><span class="line">${pick.line || '--'}</span></td>
+                    <td><span class="odds">${pick.odds || '--'}</span></td>
+                    <td><span class="ev-badge ${getEVClass(pick.ev)}">${pick.ev >= 0 ? '+' : ''}${pick.ev.toFixed(1)}%</span></td>
+                    <td>
+                        <div class="win-prob">
+                            <span class="win-prob-text">${pick.winProb?.toFixed(0) || '--'}%</span>
+                            <div class="prob-bar">
+                                <div class="prob-fill" style="width: ${pick.winProb || 0}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="units">${pick.units > 0 ? '+' : ''}${pick.units.toFixed(2)}</span></td>
+                </tr>
+            `).join('');
+
+            tbody.innerHTML = html;
+        }
+
+        // Format game time to ET
+        function formatGameTime(utcTimeString) {
+            if (!utcTimeString) return '--:--';
+            const date = new Date(utcTimeString);
+            return date.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: 'America/New_York'
+            }) + ' ET';
+        }
+
+        // Calculate units from EV (simple Kelly: units = EV * 10)
+        function calculateUnits(ev, winProb) {
+            if (!ev || ev <= 0) return 0;
+            // Simple units calculation based on EV
+            return Math.round(ev * 100) / 10;
+        }
+
+        // Fetch results data from API
+        async function fetchResults() {
+            try {
+                const response = await fetch(`${API_BASE}/results?days=30`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success && data.stats) {
+                    // Update statistics display
+                    const recordEl = document.getElementById('recordStat');
+                    const winRateEl = document.getElementById('winRateStat');
+                    const unitsEl = document.getElementById('unitsStat');
+                    const roiEl = document.getElementById('roiStat');
+
+                    // Update record
+                    recordEl.textContent = data.stats.record || '--';
+
+                    // Update win rate
+                    winRateEl.textContent = `${data.stats.win_rate || 0}%`;
+
+                    // Update total units with color coding
+                    const units = data.stats.total_units || 0;
+                    unitsEl.textContent = `${units >= 0 ? '+' : ''}${units.toFixed(1)}`;
+                    unitsEl.classList.remove('positive', 'negative');
+                    if (units > 0) {
+                        unitsEl.classList.add('positive');
+                    } else if (units < 0) {
+                        unitsEl.classList.add('negative');
+                    }
+
+                    // Update ROI with color coding
+                    const roi = data.stats.roi_percentage || 0;
+                    roiEl.textContent = `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%`;
+                    roiEl.classList.remove('positive', 'negative');
+                    if (roi > 0) {
+                        roiEl.classList.add('positive');
+                    } else if (roi < 0) {
+                        roiEl.classList.add('negative');
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching results:', error);
+                // Don't show error to user, just log it
+            }
+        }
+
+        // Fetch picks data from API
+        async function fetchPicks() {
+            try {
+                const response = await fetch(`${API_BASE}/picks`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Transform API data to match frontend expectations
+                const picks = (data.picks || []).map(pick => ({
+                    gameTime: formatGameTime(pick.game_time),
+                    awayTeam: pick.away_team,
+                    homeTeam: pick.home_team,
+                    betType: pick.bet_type,
+                    side: pick.side,
+                    line: pick.line,
+                    odds: pick.odds,
+                    ev: pick.ev * 100, // Convert to percentage
+                    winProb: pick.win_probability * 100, // Convert to percentage
+                    units: calculateUnits(pick.ev, pick.win_probability)
+                }));
+
+                renderPicksTable(picks);
+                updateLastRefreshTime();
+            } catch (error) {
+                console.error('Error fetching picks:', error);
+
+                // Show error state
+                const tbody = document.getElementById('picksTableBody');
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">⚠️</div>
+                                <div class="empty-state-text">Unable to load picks. Retrying...</div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        // Initialize
+        function init() {
+            fetchResults();
+            fetchPicks();
+
+            // Auto-refresh every 60 seconds
+            setInterval(fetchPicks, REFRESH_INTERVAL);
+            setInterval(fetchResults, REFRESH_INTERVAL);
+        }
+
+        // Start the app
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

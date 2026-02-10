@@ -1,0 +1,72 @@
+# Sport-Specific Configuration
+
+nba:
+  name: "NBA"
+  api_endpoint: "https://api-nba-v1.p.rapidapi.com"
+
+  # Model parameters
+  model:
+    # Pace factor weight in projections
+    pace_weight: 0.8
+
+    # Offensive/defensive efficiency weights
+    offense_weight: 0.5
+    defense_weight: 0.5
+
+    # Days to look back for rolling averages
+    lookback_days: 30
+
+    # Weight for recent games (exponential decay)
+    recent_weight: 0.7
+
+  # Adjustments
+  adjustments:
+    # Rest days impact
+    rest_advantage: 1.5
+    back_to_back_penalty: -2.0
+
+    # Injury impact
+    star_injury_penalty: -5.0
+    key_injury_penalty: -3.0
+
+    # Travel impact
+    cross_country_penalty: -1.5
+
+  # betting markets to track
+  markets:
+    - "spreads"
+    - "totals"
+    - "moneyline"
+
+wnba:
+  name: "WNBA"
+  # Less efficient market, potentially more edge
+  model:
+    pace_weight: 0.7
+    offense_weight: 0.5
+    defense_weight: 0.5
+    lookback_days: 20
+
+nfl:
+  name: "NFL"
+  model:
+    pace_weight: 0.0  # Football doesn't have pace
+    offense_weight: 0.6
+    defense_weight: 0.4
+    lookback_days: 16
+
+mlb:
+  name: "MLB"
+  model:
+    pace_weight: 0.0
+    offense_weight: 0.55
+    defense_weight: 0.45
+    lookback_days: 30
+
+nhl:
+  name: "NHL"
+  model:
+    pace_weight: 0.6
+    offense_weight: 0.5
+    defense_weight: 0.5
+    lookback_days: 20

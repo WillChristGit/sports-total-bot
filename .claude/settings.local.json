@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "mcp__web-search-prime__webSearchPrime",
+      "mcp__web-reader__webReader",
+      "Bash(./venv/bin/python:*)",
+      "Bash(PYTHONPATH=/Volumes/LegbaSSD/bots/SportsTotalBot python3:*)",
+      "Bash(venv_linux/bin/python3:*)",
+      "Bash(./venv_linux/bin/python:*)",
+      "Bash(sqlite3:*)",
+      "Bash(pip3 install:*)",
+      "Bash(curl:*)",
+      "Bash(sort:*)",
+      "Bash(__NEW_LINE_036db7e6020ca804__ python3 /Volumes/LegbaSSD/bots/SportsTotalBot/src/data/ncaa_stats_fetcher.py)",
+      "Bash(__NEW_LINE_9d07272a5be06fea__ python3 << 'EOF'\nfrom src.data.ncaa_stats_fetcher import test_ncaa_sources\n\n# Test a wider range of teams\nteams = [\n    'Duke Blue Devils',\n    'Kansas Jayhawks',\n    'Kentucky Wildcats',\n    'North Carolina Tar Heels',\n    'UCLA Bruins',\n    'Gonzaga Bulldogs',\n    'Villanova Wildcats',\n    'Arizona Wildcats',\n    'Purdue Boilermakers',\n    'UConn Huskies',\n]\n\nprint\\(\"=\" * 70\\)\nprint\\(\"NCAA Stats Fetcher - Comprehensive Test\"\\)\nprint\\(\"=\" * 70\\)\n\ntest_results = test_ncaa_sources\\(teams\\)\n\nprint\\(f\"\\\\nTeams tested: {test_results['teams_tested']}\"\\)\nprint\\(f\"Successful fetches: {test_results['successful_fetches']}\"\\)\nprint\\(f\"League average fallbacks: {test_results['league_average_fallbacks']}\"\\)\nprint\\(f\"Success rate: {test_results['successful_fetches'] / test_results['teams_tested'] * 100:.1f}%\"\\)\n\nprint\\(\"\\\\nTeam Results:\"\\)\nprint\\(\"-\" * 70\\)\nfor team, result in test_results['team_results'].items\\(\\):\n    source_mark = \"REAL DATA\" if not result['is_league_average'] else \"LEAGUE AVG\"\n    print\\(f\"{team:30s} | {result['source']:20s} | PPG: {result['points_per_game']:5.1f} | {source_mark}\"\\)\n\nprint\\(\"\\\\nSource Statistics:\"\\)\nprint\\(\"-\" * 70\\)\nfor source, stats in test_results['source_stats']['sources'].items\\(\\):\n    if stats['attempts'] > 0:\n        bar = \"█\" * int\\(stats['success_rate'] / 10\\) if stats['success_rate'] > 0 else \"\"\n        print\\(f\"{source:20s} | {stats['successes']:2d}/{stats['attempts']:2d} \\({stats['success_rate']:5.1f}%\\) {bar}\"\\)\n\nprint\\(\"\\\\nSummary:\"\\)\nprint\\(\"-\" * 70\\)\nprint\\(f\"The fetcher successfully retrieved stats for {test_results['successful_fetches']} out of {test_results['teams_tested']} teams.\"\\)\nprint\\(f\"Primary working source: Sports Reference \\(cbb\\)\"\\)\nprint\\(f\"Cache duration: 24 hours\"\\)\nEOF)"
+    ]
+  }
+}

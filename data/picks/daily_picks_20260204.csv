@@ -1,0 +1,8 @@
+Game ID,Sport,Bet Type,Side,Line,Odds,Projected Value,EV,Win Probability,Confidence,Home Team,Away Team,Game Time,Reasoning
+09a1c85451c2450418f5bcba90e220b9,nba,totals,under,247.5,-112,228.5,0.1056,0.5841,0.7000,Raptors,Minnesota Timberwolves,2026-02-05 00:42,"Projected: 228.5 vs Line: 247.5 (Diff: -19.0). Win Prob: 58.4%, EV: 10.56%. "
+720fb0aa5ec9b76d0ba6782d87da5d6e,nba,totals,under,233.2,-113,217.9,0.0825,0.5743,0.7000,Milwaukee Bucks,New Orleans Pelicans,2026-02-05 01:11,"Projected: 217.9 vs Line: 233.2 (Diff: -15.3). Win Prob: 57.4%, EV: 8.25%. "
+8b816f6d79780a1772852263e815b070,nba,totals,over,187.4,-116,226.8,0.1166,0.5996,0.7000,Houston Rockets,Celtics,2026-02-05 01:12,"Projected: 226.8 vs Line: 187.4 (Diff: +39.4). Win Prob: 60.0%, EV: 11.66%. "
+7eb233edb6e9e03622d300ca7dd2c1df,nba,totals,over,220.9,-110,233.1,0.0756,0.5634,0.7000,San Antonio Spurs,Oklahoma City Thunder,2026-02-05 02:40,"Projected: 233.1 vs Line: 220.9 (Diff: +12.2). Win Prob: 56.3%, EV: 7.56%. "
+7eb233edb6e9e03622d300ca7dd2c1df,nba,spreads,away,9.7,-109,0.5,0.0642,0.5550,0.6000,San Antonio Spurs,Oklahoma City Thunder,2026-02-05 02:40,"Projected Margin: -0.5 vs Line: 9.7. Win Prob: 55.5%, EV: 6.42%. "
+4336bce3a2a2e0e4ab7b6bd8f79693d8,nba,totals,under,232.9,-111,217.8,0.0905,0.5737,0.7000,Sacramento Kings,Memphis Grizzlies,2026-02-05 03:10,"Projected: 217.8 vs Line: 232.9 (Diff: -15.1). Win Prob: 57.4%, EV: 9.05%. "
+29d21b1015a4f76d386601af48083a64,nba,totals,under,232.3,-108,222.2,0.0680,0.5546,0.7000,Lakers,76ers,2026-02-06 03:10,"Projected: 222.2 vs Line: 232.3 (Diff: -10.1). Win Prob: 55.5%, EV: 6.80%. "

@@ -1,0 +1,8 @@
+date,game,pick,line,projected,actual,result,units_won
+2026-02-03,Jazz @ Pacers,UNDER,232.6,218.6,253,LOSS,-1.00
+2026-02-03,Knicks @ Wizards,UNDER,227.5,221.5,233,LOSS,-1.00
+2026-02-03,Hawks @ Heat,UNDER,237.4,230.6,242,LOSS,-1.00
+2026-02-03,Magic @ Thunder,OVER,220.3,231.2,220,LOSS,-1.00
+2026-02-03,76ers @ Warriors,OVER,221.4,227.3,207,LOSS,-1.00
+2026-02-03,Suns @ Blazers,OVER,218.6,226.0,255,WIN,+0.91
+# BUG FIX 2026-02-04: Season was set to 2024-25 (old data). Fixed to 2025-26. Cache cleared.

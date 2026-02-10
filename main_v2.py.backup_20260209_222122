@@ -1,0 +1,972 @@
+#!/usr/bin/env python3
+"""
+SportsTotalBot - Main Entry Point (V2 - Enhanced)
+
+An AI-powered sports betting analysis bot that identifies
+positive EV (Expected Value) betting opportunities on sports totals.
+
+V2 Improvements:
+- Fixed bare except clause with proper error handling
+- Added team name mapping between APIs
+- Fixed odds parsing bug
+- Enhanced projection model (efficiency metrics, fatigue)
+- Enhanced EV calculator (Kelly sizing, line movement)
+- Better error handling and logging
+- Real NBA stats fetching
+- Environment variable support
+- Retry logic with exponential backoff
+"""
+
+import sys
+import os
+import argparse
+import logging
+from datetime import datetime
+from pathlib import Path
+
+# Add src to path
+src_path = os.path.join(os.path.dirname(__file__), 'src')
+sys.path.insert(0, src_path)
+
+# Import from src modules
+from src.data.models import Game, SportType, BetType, OddsLine, BetSide
+from src.data.fetchers import get_games_with_odds, NBAStatsFetcher
+from src.data.nba_stats_cache import NBAStatsFetcher as NBAStatsCache
+from src.data.multi_source_stats import MultiSourceStatsFetcher, DataQualityReport
+from src.data.injury_fetcher import InjuryFetcher
+from src.storage.database import Database
+from src.analysis.projections_v2 import create_enhanced_projection_model, AdvancedTeamStats, ScheduleInfo, InjuryImpact
+from src.analysis.spread_projections import create_spread_projection_model, SpreadProjection
+from src.analysis.ev_calculator_v2 import EnhancedEVCalculator, LineMovement
+from src.analysis.backtester import Backtester
+from src.output.formatter import OutputFormatter, DiscordNotifier, TelegramNotifier
+from src.config.loader import Config
+from src.utils.logging import setup_logging as configure_logging
+from scripts.pick_tracker import PickTracker
+import yaml
+
+# Load environment variables from .env file if present
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv is optional
+
+
+# Team name mappings between different APIs
+TEAM_NAME_MAPPINGS = {
+    # Odds API -> NBA API
+    'Los Angeles Lakers': 'Lakers',
+    'Los Angeles Clippers': 'Clippers',
+    'Boston Celtics': 'Celtics',
+    'Brooklyn Nets': 'Nets',
+    'New York Knicks': 'Knicks',
+    'Philadelphia 76ers': '76ers',
+    'Toronto Raptors': 'Raptors',
+    'Golden State Warriors': 'Warriors',
+    'LA Clippers': 'Clippers',
+
+    # Common abbreviations
+    'LAL': 'Los Angeles Lakers',
+    'LAC': 'Los Angeles Clippers',
+    'BOS': 'Boston Celtics',
+    'BKN': 'Brooklyn Nets',
+    'NYK': 'New York Knicks',
+    'PHI': 'Philadelphia 76ers',
+    'TOR': 'Toronto Raptors',
+    'GSW': 'Golden State Warriors',
+    'MIL': 'Milwaukee Bucks',
+    'CHI': 'Chicago Bulls',
+    'CLE': 'Cleveland Cavaliers',
+    'MIA': 'Miami Heat',
+    'DAL': 'Dallas Mavericks',
+    'SAS': 'San Antonio Spurs',
+    'HOU': 'Houston Rockets',
+    'DEN': 'Denver Nuggets',
+    'UTA': 'Utah Jazz',
+    'PHX': 'Phoenix Suns',
+    'SAC': 'Sacramento Kings',
+    'POR': 'Portland Trail Blazers',
+    'OKC': 'Oklahoma City Thunder',
+    'MIN': 'Minnesota Timberwolves',
+}
+
+
+def normalize_team_name(team_name: str) -> str:
+    """Normalize team name using mapping"""
+    return TEAM_NAME_MAPPINGS.get(team_name, team_name)
+
+
+def setup_logging(log_level: str = "INFO"):
+    """Setup logging configuration using the enhanced logging module"""
+    return configure_logging(log_level=log_level)
+
+
+def load_config(config_path: str = "config/config.yaml") -> Config:
+    """Load configuration from YAML file with environment variable overrides"""
+    return Config(config_path)
+
+
+def load_sports_config() -> dict:
+    """Load sport-specific configuration"""
+    try:
+        with open('config/sports_config.yaml', 'r') as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        logging.warning("Sports config file not found, using defaults")
+        return {}
+    except yaml.YAMLError as e:
+        logging.warning(f"Error parsing sports config: {e}, using defaults")
+        return {}
+
+
+def validate_api_key(api_key: str) -> bool:
+    """Validate API key format"""
+    if not api_key or api_key == "YOUR_API_KEY_HERE":
+        return False
+    return len(api_key) > 10  # Basic validation
+
+
+def validate_game_data(game_data: dict) -> bool:
+    """Validate game data from API"""
+    required_fields = ['id', 'home_team', 'away_team', 'commence_time']
+    for field in required_fields:
+        if field not in game_data:
+            logging.warning(f"Invalid game data: missing {field}")
+            return False
+    return True
+
+
+def parse_odds_api_response(raw_data: list, sport: SportType = SportType.NBA) -> tuple[dict, dict]:
+    """
+    Parse the Odds API response into Games and Odds objects
+
+    V2 Fix: Properly aggregates odds from multiple bookmakers
+    Now includes both totals and spreads
+
+    Args:
+        raw_data: Raw API response data
+        sport: SportType to assign to games (NBA, NCAA, etc.)
+    """
+    if not raw_data:
+        logging.warning("No data received from API")
+        return {}, {}
+
+    games = {}
+    odds_dict = {}
+
+    for game_data in raw_data:
+        # Validate game data
+        if not validate_game_data(game_data):
+            continue
+
+        game_id = game_data.get('id')
+
+        # Parse game info
+        home_team = normalize_team_name(game_data.get('home_team', ''))
+        away_team = normalize_team_name(game_data.get('away_team', ''))
+
+        try:
+            game_time = datetime.fromisoformat(
+                game_data.get('commence_time', '').replace('Z', '+00:00')
+            )
+        except ValueError as e:
+            logging.warning(f"Invalid datetime for game {game_id}: {e}")
+            continue
+
+        game = Game(
+            game_id=game_id,
+            sport=sport,
+            home_team=home_team,
+            away_team=away_team,
+            game_time=game_time
+        )
+        games[game_id] = game
+
+        # Aggregate odds from all bookmakers (using consensus)
+        # For totals
+        over_odds_list = []
+        under_odds_list = []
+        total_lines = []
+
+        # For spreads
+        home_spreads = []
+        home_spread_odds = []
+        away_spreads = []
+        away_spread_odds = []
+
+        for bookmaker in game_data.get('bookmakers', []):
+            for market in bookmaker.get('markets', []):
+                # Parse totals
+                if market.get('key') == 'totals':
+                    for outcome in market.get('outcomes', []):
+                        line = outcome.get('point')
+                        price = outcome.get('price')
+
+                        if line is not None and price is not None:
+                            total_lines.append(line)
+                            if outcome.get('name') == 'Over':
+                                over_odds_list.append(price)
+                            elif outcome.get('name') == 'Under':
+                                under_odds_list.append(price)
+
+                # Parse spreads
+                elif market.get('key') == 'spreads':
+                    for outcome in market.get('outcomes', []):
+                        line = outcome.get('point')
+                        price = outcome.get('price')
+                        name = normalize_team_name(outcome.get('name', ''))  # Normalize the outcome name too!
+
+                        if line is not None and price is not None:
+                            # Spread line is usually negative for favorite
+                            # outcome.get('name') is team name
+                            if name == home_team:
+                                home_spreads.append(abs(line))  # Store as positive for consistency
+                                home_spread_odds.append(price)
+                            elif name == away_team:
+                                away_spreads.append(abs(line))  # Store as positive for consistency
+                                away_spread_odds.append(price)
+
+        # Create totals odds if we have data
+        if total_lines and over_odds_list and under_odds_list:
+            avg_line = round(sum(total_lines) / len(total_lines), 1)  # Round to 1 decimal
+            avg_over_odds = round(sum(over_odds_list) / len(over_odds_list))
+            avg_under_odds = round(sum(under_odds_list) / len(under_odds_list))
+
+            totals_odds = OddsLine(
+                game_id=game_id,
+                sport=sport,
+                bet_type=BetType.TOTALS,
+                total_line=avg_line,
+                over_odds=avg_over_odds,
+                under_odds=avg_under_odds,
+                book_name="consensus",
+                update_time=datetime.now()
+            )
+            odds_dict[f"{game_id}_totals"] = totals_odds
+
+        # Create spreads odds if we have data
+        if home_spreads and away_spreads and home_spread_odds and away_spread_odds:
+            # Average the spreads (they should be the same or very close)
+            avg_home_spread = round(sum(home_spreads) / len(home_spreads), 1)
+            avg_away_spread = round(sum(away_spreads) / len(away_spreads), 1)
+            avg_home_spread_odds = round(sum(home_spread_odds) / len(home_spread_odds))
+            avg_away_spread_odds = round(sum(away_spread_odds) / len(away_spread_odds))
+
+            spreads_odds = OddsLine(
+                game_id=game_id,
+                sport=sport,
+                bet_type=BetType.SPREAD,
+                home_spread=avg_home_spread,
+                home_spread_odds=avg_home_spread_odds,
+                away_spread=avg_away_spread,
+                away_spread_odds=avg_away_spread_odds,
+                book_name="consensus",
+                update_time=datetime.now()
+            )
+            odds_dict[f"{game_id}_spreads"] = spreads_odds
+
+    logging.info(f"Parsed {len(games)} games with odds")
+    return games, odds_dict
+
+
+def create_enhanced_team_stats(team_name: str, stats_cache: NBAStatsCache) -> AdvancedTeamStats:
+    """
+    Create enhanced team stats using real NBA data
+    Falls back to league averages if data unavailable
+    """
+    # Get real stats from NBA.com
+    real_stats = stats_cache.get_team_stats(team_name)
+
+    if real_stats:
+        return AdvancedTeamStats(
+            team_id=real_stats['team_id'],
+            team_name=real_stats['team_name'],
+            games_played=real_stats['games_played'],
+            avg_points_scored=real_stats['avg_points_scored'],
+            avg_points_allowed=real_stats['avg_points_allowed'],
+            offensive_rating=real_stats['offensive_rating'],
+            defensive_rating=real_stats['defensive_rating'],
+            efg_pct=real_stats.get('efg_pct', 0.520),
+            tov_pct=real_stats.get('tov_pct', 0.135),
+            orb_pct=real_stats.get('orb_pct', 0.260),
+            ft_rate=real_stats.get('ft_rate', 0.210),
+            pace=real_stats['pace'],
+            last_5_points_scored=[],  # Would fetch from game log
+            last_5_points_allowed=[]
+        )
+    else:
+        # Fallback to league averages (2024-25 NBA averages)
+        logging.getLogger(__name__).warning(f"Using league averages for {team_name}")
+        return AdvancedTeamStats(
+            team_id=team_name[:3].upper(),
+            team_name=team_name,
+            games_played=50,
+            avg_points_scored=112.5,  # 2024-25 league avg
+            avg_points_allowed=112.5,
+            offensive_rating=114.0,
+            defensive_rating=114.0,
+            efg_pct=0.520,
+            tov_pct=0.135,
+            orb_pct=0.260,
+            ft_rate=0.210,
+            pace=99.5,  # 2024-25 league avg pace
+            last_5_points_scored=[],
+            last_5_points_allowed=[]
+        )
+
+
+def create_schedule_info(team_name: str, stats_cache: NBAStatsCache) -> ScheduleInfo:
+    """Create schedule info using real NBA schedule data"""
+    schedule_data = stats_cache.get_team_schedule(team_name)
+
+    return ScheduleInfo(
+        days_rest=schedule_data.get('days_rest', 2),
+        is_back_to_back=schedule_data.get('is_back_to_back', False),
+        is_third_in_4_days=schedule_data.get('is_third_in_4_days', False),
+        travel_distance_miles=schedule_data.get('travel_distance_miles', 0),
+        time_zone_changes=schedule_data.get('time_zone_changes', 0)
+    )
+
+
+def update_and_display_results(db: Database, logger: logging.Logger) -> dict:
+    """
+    Update results for completed games and display summary
+
+    Returns:
+        dict with results summary stats
+    """
+    logger.info("Updating results for completed games...")
+
+    try:
+        updated = db.update_results_for_completed_games()
+        logger.info(f"Updated {len(updated)} game results")
+
+        if updated:
+            # Calculate summary stats
+            completed = [r for r in updated if r.get('is_completed', False)]
+            wins = sum(1 for r in completed if r.get('won', False) == 1)
+            losses = len(completed) - wins
+            total_pl = sum(r.get('profit_loss', 0) for r in completed)
+
+            summary = {
+                'updated_count': len(updated),
+                'completed_count': len(completed),
+                'wins': wins,
+                'losses': losses,
+                'win_rate': (wins / len(completed) * 100) if completed else 0,
+                'profit_loss': total_pl
+            }
+
+            # Log summary to console
+            logger.info("=" * 60)
+            logger.info("📊 RESULTS UPDATE SUMMARY")
+            logger.info("=" * 60)
+            logger.info(f"Games Updated:  {summary['updated_count']}")
+            logger.info(f"Completed:      {summary['completed_count']}")
+            logger.info(f"Results:        {summary['wins']}W - {summary['losses']}L")
+            logger.info(f"Win Rate:       {summary['win_rate']:.1f}%")
+            logger.info(f"Profit/Loss:    ${summary['profit_loss']:+.2f}")
+            logger.info("=" * 60)
+
+            return summary
+        else:
+            logger.info("No new results to update")
+            return {
+                'updated_count': 0,
+                'completed_count': 0,
+                'wins': 0,
+                'losses': 0,
+                'win_rate': 0,
+                'profit_loss': 0
+            }
+
+    except Exception as e:
+        logger.error(f"Failed to update results: {e}")
+        return {
+            'updated_count': 0,
+            'completed_count': 0,
+            'wins': 0,
+            'losses': 0,
+            'win_rate': 0,
+            'profit_loss': 0
+        }
+
+
+def run_analysis(config: Config, db: Database, sport_type: SportType = SportType.NBA) -> tuple:
+    """
+    Main analysis pipeline (V2 Enhanced with Multi-Source Stats)
+
+    Args:
+        config: Bot configuration
+        db: Database instance
+        sport_type: SportType to analyze (NBA, NCAA, etc.)
+
+    Returns:
+        (recommendations, games, quality_report, injury_reports)
+    """
+    logger = logging.getLogger(__name__)
+    api_key = config.get('api_keys.the_odds_api', '')
+
+    if not validate_api_key(api_key):
+        logger.error("Invalid API key configured!")
+        logger.info("Get a free API key at: https://the-odds-api.com/")
+        logger.info("Add your key via ODDS_API_KEY env var or in config/config.yaml")
+        return [], {}, None, {}
+
+    # Map sport type to API key string
+    sport_key = {SportType.NBA: 'nba', SportType.NCAA: 'ncaab'}.get(sport_type, 'nba')
+
+    # Initialize sport-specific stats fetcher
+    if sport_type == SportType.NBA:
+        stats_fetcher = MultiSourceStatsFetcher(odds_api_key=api_key)
+    elif sport_type == SportType.NCAA:
+        from src.data.ncaa_stats_fetcher import NCAAStatsFetcher
+        sportsdataio_key = os.environ.get('SPORTSDATAIO_KEY', '')
+        stats_fetcher = NCAAStatsFetcher(cache_dir="data/cache/ncaa", sportsdataio_key=sportsdataio_key)
+    else:
+        stats_fetcher = MultiSourceStatsFetcher(odds_api_key=api_key)
+
+    # Fetch games with odds
+    logger.info("Fetching games and odds...")
+    try:
+        raw_games = get_games_with_odds(api_key, sport=sport_key)
+    except Exception as e:
+        logger.error(f"Failed to fetch games: {e}")
+        return [], {}, None, {}
+
+    if not raw_games:
+        logger.warning("No games found")
+        return [], {}, None, {}
+
+    logger.info(f"Found {len(raw_games)} games")
+
+    # Parse into models
+    games, odds_data = parse_odds_api_response(raw_games, sport_type)
+
+    if not games:
+        logger.warning("No valid games after parsing")
+        return [], {}, None, {}
+
+    # Save games to database
+    for game in games.values():
+        try:
+            db.save_game(game)
+        except Exception as e:
+            logger.error(f"Failed to save game {game.game_id}: {e}")
+
+    # Load sports config
+    sports_config = load_sports_config()
+    nba_config = sports_config.get('nba', {}).get('model', {})
+
+    # Fetch injury data (sport-specific)
+    injury_reports = {}
+    injury_fetcher = None  # Will be set for NBA
+    if sport_type == SportType.NBA:
+        logger.info("Fetching injury reports...")
+        injury_fetcher = InjuryFetcher(cache_dir="data/cache/injuries")
+        try:
+            injury_fetcher.fetch_all_injuries()
+            injury_summary = injury_fetcher.log_injury_summary()
+            if injury_summary:
+                logger.info(f"\n{injury_summary}")
+            injury_reports = injury_fetcher.team_injuries
+        except Exception as e:
+            logger.warning(f"Failed to fetch injury data: {e}")
+    elif sport_type == SportType.NCAA:
+        # NCAA injuries are less impactful - use simpler fetcher
+        try:
+            ncaa_injury_fetcher = NCAAInjuryFetcher(cache_dir="data/cache/ncaa/injuries")
+            ncaa_injury_fetcher.fetch_injuries()
+            injury_reports = ncaa_injury_fetcher.injuries
+            logger.info(f"NCAA injury reports loaded for {len(injury_reports)} teams")
+        except Exception as e:
+            logger.warning(f"Failed to fetch NCAA injury data: {e}")
+
+    # Create enhanced projection models (sport-specific)
+    totals_model = create_enhanced_projection_model(sport_type, nba_config)
+    spreads_model = create_spread_projection_model(sport_type, nba_config)
+
+    # Create enhanced EV calculator
+    min_ev = config.get('analysis.min_ev_threshold', 0.015)  # More conservative
+    min_conf = config.get('analysis.min_confidence', 0.525)  # Breakeven
+    ev_calc = EnhancedEVCalculator(min_ev_threshold=min_ev)
+
+    recommendations = []
+
+    # Analyze each game
+    # Group odds by game_id (since we now have totals and spreads for each game)
+    game_odds_map = {}
+    for odds_key, odds in odds_data.items():
+        # Extract game_id from odds_key (format: "game_id_totals" or "game_id_spreads")
+        if '_totals' in odds_key:
+            game_id = odds_key.replace('_totals', '')
+            if game_id not in game_odds_map:
+                game_odds_map[game_id] = {}
+            game_odds_map[game_id]['totals'] = odds
+        elif '_spreads' in odds_key:
+            game_id = odds_key.replace('_spreads', '')
+            if game_id not in game_odds_map:
+                game_odds_map[game_id] = {}
+            game_odds_map[game_id]['spreads'] = odds
+
+    # Process each unique game
+    for game_id, odds_map in game_odds_map.items():
+        game = games.get(game_id)
+        if not game:
+            continue
+
+        logger.info(f"Analyzing: {game.away_team} @ {game.home_team}")
+
+        # Get team stats with sport-specific fetcher
+        if sport_type == SportType.NBA:
+            home_stats_data = stats_fetcher.get_team_stats(game.home_team)
+            away_stats_data = stats_fetcher.get_team_stats(game.away_team)
+
+            # Convert to AdvancedTeamStats format
+            home_stats = AdvancedTeamStats(
+                team_id=str(stats_fetcher.team_name_to_id.get(game.home_team, game.home_team[:3])),
+                team_name=game.home_team,
+                games_played=50,
+                avg_points_scored=home_stats_data.points_per_game,
+                avg_points_allowed=home_stats_data.opp_points_per_game,
+                offensive_rating=home_stats_data.offensive_rating,
+                defensive_rating=home_stats_data.defensive_rating,
+                efg_pct=home_stats_data.efg_pct,
+                tov_pct=home_stats_data.tov_pct,
+                orb_pct=home_stats_data.orb_pct,
+                ft_rate=home_stats_data.ft_rate,
+                pace=home_stats_data.pace,
+                last_5_points_scored=[],
+                last_5_points_allowed=[]
+            )
+
+            away_stats = AdvancedTeamStats(
+                team_id=str(stats_fetcher.team_name_to_id.get(game.away_team, game.away_team[:3])),
+                team_name=game.away_team,
+                games_played=50,
+                avg_points_scored=away_stats_data.points_per_game,
+                avg_points_allowed=away_stats_data.opp_points_per_game,
+                offensive_rating=away_stats_data.offensive_rating,
+                defensive_rating=away_stats_data.defensive_rating,
+                efg_pct=away_stats_data.efg_pct,
+                tov_pct=away_stats_data.tov_pct,
+                orb_pct=away_stats_data.orb_pct,
+                ft_rate=away_stats_data.ft_rate,
+                pace=away_stats_data.pace,
+                last_5_points_scored=[],
+                last_5_points_allowed=[]
+            )
+        elif sport_type == SportType.NCAA:
+            # NCAA returns (stats_dict, results) tuple
+            home_stats_dict, _ = stats_fetcher.get_team_stats(game.home_team)
+            away_stats_dict, _ = stats_fetcher.get_team_stats(game.away_team)
+
+            home_stats = AdvancedTeamStats(
+                team_id=game.home_team[:3].upper(),
+                team_name=game.home_team,
+                games_played=25,  # NCAA has fewer games
+                avg_points_scored=home_stats_dict.get('points_per_game', 75.5),
+                avg_points_allowed=home_stats_dict.get('opponent_points_per_game', 75.5),
+                offensive_rating=home_stats_dict.get('offensive_rating', 105.0),
+                defensive_rating=home_stats_dict.get('defensive_rating', 105.0),
+                efg_pct=home_stats_dict.get('field_goal_pct', 0.450),
+                tov_pct=0.150,  # Default
+                orb_pct=0.300,  # Default
+                ft_rate=0.250,  # Default
+                pace=home_stats_dict.get('pace', 70.5),
+                last_5_points_scored=[],
+                last_5_points_allowed=[]
+            )
+
+            away_stats = AdvancedTeamStats(
+                team_id=game.away_team[:3].upper(),
+                team_name=game.away_team,
+                games_played=25,
+                avg_points_scored=away_stats_dict.get('points_per_game', 75.5),
+                avg_points_allowed=away_stats_dict.get('opponent_points_per_game', 75.5),
+                offensive_rating=away_stats_dict.get('offensive_rating', 105.0),
+                defensive_rating=away_stats_dict.get('defensive_rating', 105.0),
+                efg_pct=away_stats_dict.get('field_goal_pct', 0.450),
+                tov_pct=0.150,
+                orb_pct=0.300,
+                ft_rate=0.250,
+                pace=away_stats_dict.get('pace', 70.5),
+                last_5_points_scored=[],
+                last_5_points_allowed=[]
+            )
+
+        # Get schedule info (sport-specific)
+        if sport_type == SportType.NBA:
+            home_schedule = create_schedule_info(game.home_team, NBAStatsCache())
+            away_schedule = create_schedule_info(game.away_team, NBAStatsCache())
+        else:
+            # For NCAA, use empty schedule info (no data available yet)
+            from datetime import datetime
+            home_schedule = ScheduleInfo(
+                last_game_date=None,
+                days_rest=2,
+                is_back_to_back=False,
+                is_third_in_4_days=False,
+                travel_distance_miles=0,
+                time_zone_changes=0
+            )
+            away_schedule = ScheduleInfo(
+                last_game_date=None,
+                days_rest=2,
+                is_back_to_back=False,
+                is_third_in_4_days=False,
+                travel_distance_miles=0,
+                time_zone_changes=0
+            )
+
+        # Calculate data quality for this game
+        if sport_type == SportType.NBA:
+            quality_scores = {"A": 5, "B": 4, "C": 3, "D": 2, "F": 1}
+            home_score = quality_scores.get(home_stats_data.data_quality.value, 2)
+            away_score = quality_scores.get(away_stats_data.data_quality.value, 2)
+            avg_score = (home_score + away_score) / 2
+        else:
+            # NCAA using league averages for now
+            data_quality = "D"  # Poor data quality for NCAA initially
+
+        # Convert back to grade (only for NBA)
+        if sport_type == SportType.NBA:
+            if avg_score >= 4.5:
+                data_quality = "A"
+            elif avg_score >= 3.5:
+                data_quality = "B"
+            elif avg_score >= 2.5:
+                data_quality = "C"
+            elif avg_score >= 1.5:
+                data_quality = "D"
+            else:
+                data_quality = "F"
+
+        # Get injury impact for this game
+        injury_impact = None
+        if sport_type == SportType.NBA:
+            try:
+                game_injury_data = injury_fetcher.get_game_injury_impact(
+                    game.home_team, game.away_team
+                )
+                injury_impact = InjuryImpact(
+                    home_offensive_impact=game_injury_data.get('home_offensive_impact', 0),
+                    home_defensive_impact=game_injury_data.get('home_defensive_impact', 0),
+                    away_offensive_impact=game_injury_data.get('away_offensive_impact', 0),
+                    away_defensive_impact=game_injury_data.get('away_defensive_impact', 0),
+                    pace_impact=game_injury_data.get('pace_impact', 0),
+                    significant_injuries=game_injury_data.get('significant_injuries', [])
+                )
+            except Exception as e:
+                logger.debug(f"No injury data for {game.home_team} vs {game.away_team}: {e}")
+        # NCAA injuries have less impact - skip for now
+
+        # Generate TOTALS projection and picks
+        if 'totals' in odds_map:
+            try:
+                # Different models have different signatures
+                if sport_type == SportType.NBA:
+                    # Build project_game args for NBA
+                    project_args = {
+                        'game': game,
+                        'home_stats': home_stats,
+                        'away_stats': away_stats,
+                        'home_schedule': home_schedule,
+                        'away_schedule': away_schedule
+                    }
+                    if injury_impact:
+                        project_args['injury_impact'] = injury_impact
+                else:
+                    # For NCAA (SimpleTotalsModel), use basic args
+                    project_args = {
+                        'game': game,
+                        'home_stats': home_stats,
+                        'away_stats': away_stats
+                    }
+
+                totals_projection = totals_model.project_game(**project_args)
+
+                logger.info(f"  Totals Projection: {totals_projection.projected_total} "
+                           f"(Line: {odds_map['totals'].total_line:.1f}, Conf: {totals_projection.confidence:.0%})")
+
+                # Calculate EV for totals (with adaptive variance)
+                totals_recs = ev_calc.calculate_totals_ev(
+                    totals_projection, odds_map['totals'],
+                    min_confidence=min_conf,
+                    home_stats=home_stats, away_stats=away_stats,
+                    home_schedule=home_schedule, away_schedule=away_schedule
+                )
+
+                for rec in totals_recs:
+                    rec.data_quality = data_quality
+                    try:
+                        db.save_recommendation(rec)
+                    except Exception as e:
+                        logger.error(f"Failed to save recommendation: {e}")
+                    recommendations.append(rec)
+
+            except Exception as e:
+                logger.error(f"Failed to generate totals projection for {game_id}: {e}")
+
+        # Generate SPREADS projection and picks
+        if spreads_model and 'spreads' in odds_map:
+            try:
+                spread_projection = spreads_model.project_game(
+                    game, home_stats, away_stats,
+                    home_schedule, away_schedule,
+                    injury_impact=injury_impact
+                )
+
+                logger.info(f"  Spread Projection: {spread_projection.projected_spread:+.1f} "
+                           f"(Home: {spread_projection.projected_home_score}, "
+                           f"Away: {spread_projection.projected_away_score}, "
+                           f"Conf: {spread_projection.confidence:.0%})")
+
+                # Calculate EV for spreads (with adaptive variance)
+                spread_recs = ev_calc.calculate_spreads_ev(
+                    spread_projection.projected_home_score,
+                    spread_projection.projected_away_score,
+                    odds_map['spreads'],
+                    spread_projection.confidence,
+                    min_confidence=min_conf,
+                    home_stats=home_stats, away_stats=away_stats,
+                    home_schedule=home_schedule, away_schedule=away_schedule
+                )
+
+                for rec in spread_recs:
+                    rec.data_quality = data_quality
+                    try:
+                        db.save_recommendation(rec)
+                    except Exception as e:
+                        logger.error(f"Failed to save recommendation: {e}")
+                    recommendations.append(rec)
+
+            except Exception as e:
+                logger.error(f"Failed to generate spread projection for {game_id}: {e}")
+
+    # Get quality report (sport-specific)
+    if sport_type == SportType.NBA:
+        quality_report = stats_fetcher.get_quality_report()
+    else:
+        # For NCAA, create a basic quality report
+        quality_report = None  # TODO: Implement NCAA quality tracking
+
+    # Collect injury reports for display
+    for game_id, odds_map in game_odds_map.items():
+        game = games.get(game_id)
+        if game:
+            try:
+                if sport_type == SportType.NBA:
+                    game_injury_data = injury_fetcher.get_game_injury_impact(
+                        game.home_team, game.away_team
+                    )
+                    significant = game_injury_data.get('significant_injuries', [])
+                    if significant:
+                        injury_reports[game_id] = ", ".join(significant[:3])
+                elif sport_type == SportType.NCAA:
+                    # NCAA injuries - simpler display
+                    home_injuries = injury_reports.get(game.home_team, [])
+                    away_injuries = injury_reports.get(game.away_team, [])
+                    if home_injuries or away_injuries:
+                        injury_list = []
+                        injury_list.extend([f"{game.home_team}: {len(home_injuries)} out"] if home_injuries else [])
+                        injury_list.extend([f"{game.away_team}: {len(away_injuries)} out"] if away_injuries else [])
+                        if injury_list:
+                            injury_reports[game_id] = ", ".join(injury_list)
+            except Exception:
+                pass
+
+    return recommendations, games, quality_report, injury_reports
+
+
+def main():
+    """Main entry point"""
+    parser = argparse.ArgumentParser(
+        description='SportsTotalBot V2 - AI Sports Betting Analysis'
+    )
+    parser.add_argument('--config', default='config/config.yaml', help='Config file path')
+    parser.add_argument('--log-level', default='INFO', help='Log level')
+    parser.add_argument('--performance', action='store_true', help='Show performance report')
+    parser.add_argument('--update-results', action='store_true', help='Update results')
+    parser.add_argument('--use-v2', action='store_true', help='Use V2 enhanced models')
+    parser.add_argument('--backtest', action='store_true', help='Run backtesting analysis')
+    parser.add_argument('--backtest-days', type=int, default=30, help='Days to backtest (default: 30)')
+    parser.add_argument('--backtest-start', type=str, help='Backtest start date (YYYY-MM-DD)')
+    parser.add_argument('--backtest-end', type=str, help='Backtest end date (YYYY-MM-DD)')
+    parser.add_argument('--sport', default='all', choices=['nba', 'ncaab', 'all'], help='Sport to analyze (default: all)')
+
+    args = parser.parse_args()
+
+    # Setup logging
+    logger = setup_logging(args.log_level)
+
+    # Load config
+    try:
+        config = load_config(args.config)
+    except Exception as e:
+        logger.error(f"Failed to load config: {e}")
+        logger.info("Please ensure config/config.yaml exists with valid settings")
+        return 1
+
+    # Initialize database
+    db_path = config.get('database.path', 'data/sportstotalbot.db')
+    db = Database(db_path)
+
+    # Handle special commands
+    if args.performance:
+        try:
+            stats = db.get_performance_stats()
+            formatter = OutputFormatter()
+            print(formatter.format_performance_report(stats))
+        except Exception as e:
+            logger.error(f"Failed to get performance stats: {e}")
+        return 0
+
+    if args.update_results:
+        logger.info("Updating results for completed games...")
+        try:
+            updated = db.update_results_for_completed_games()
+            logger.info(f"Updated {len(updated)} results")
+        except Exception as e:
+            logger.error(f"Failed to update results: {e}")
+        return 0
+
+    if args.backtest:
+        logger.info("Running backtesting analysis...")
+        try:
+            backtester = Backtester(db_path=db_path, picks_path="data/picks")
+
+            # Run backtest
+            report = backtester.backtest_picks(
+                start_date=args.backtest_start,
+                end_date=args.backtest_end,
+                days_back=args.backtest_days
+            )
+
+            # Print report
+            print("\n" + report.format_report())
+
+            # Save results
+            output_file = backtester.save_backtest_results(report)
+            logger.info(f"Backtest results saved to {output_file}")
+
+        except Exception as e:
+            logger.error(f"Failed to run backtest: {e}", exc_info=True)
+            return 1
+        return 0
+
+    # Run main analysis
+    logger.info("Starting SportsTotalBot V2 analysis...")
+    logger.info(f"Version: {config.get('bot.version', '2.0.0')}")
+
+    # Determine which sports to analyze
+    sports_to_analyze = []
+    if args.sport == 'all':
+        # Get sports from config
+        configured_sports = config.get('sports', ['nba'])
+        for sport in configured_sports:
+            if sport == 'nba':
+                sports_to_analyze.append(('nba', SportType.NBA))
+            elif sport == 'ncaab':
+                sports_to_analyze.append(('ncaab', SportType.NCAA))
+    else:
+        # Single sport requested
+        if args.sport == 'nba':
+            sports_to_analyze.append(('nba', SportType.NBA))
+        elif args.sport == 'ncaab':
+            sports_to_analyze.append(('ncaab', SportType.NCAA))
+
+    logger.info(f"Analyzing sports: {[s[0] for s in sports_to_analyze]}")
+
+    recommendations = []
+    games = {}
+    quality_report = None
+    injury_reports = {}
+
+    try:
+        # Analyze each sport
+        for sport_name, sport_type in sports_to_analyze:
+            logger.info(f"\n{'='*60}")
+            logger.info(f"Analyzing {sport_name.upper()}")
+            logger.info(f"{'='*60}")
+
+            sport_recs, sport_games, sport_quality, sport_injuries = run_analysis(config, db, sport_type)
+
+            recommendations.extend(sport_recs)
+            games.update(sport_games)
+            if sport_quality:
+                if quality_report is None:
+                    quality_report = sport_quality
+                else:
+                    # Merge quality reports
+                    quality_report.total_teams += sport_quality.total_teams
+                    quality_report.excellent += sport_quality.excellent
+                    quality_report.good += sport_quality.good
+                    quality_report.fair += sport_quality.fair
+                    quality_report.poor += sport_quality.poor
+            injury_reports.update(sport_injuries)
+
+        # Update results for completed games
+        results_summary = update_and_display_results(db, logger)
+
+        # Format and output picks
+        formatter = OutputFormatter()
+        # Use compact format for console (grouped by game showing both totals and spreads)
+        report = formatter.format_daily_picks(recommendations, games, quality_report, compact=True, injury_reports=injury_reports)
+        print("\n" + report)
+
+        # Save to files
+        if recommendations:
+            try:
+                csv_file = formatter.save_picks_to_csv(recommendations, games)
+                json_file = formatter.save_picks_to_json(recommendations, games)
+                logger.info(f"Saved picks to {csv_file} and {json_file}")
+            except Exception as e:
+                logger.error(f"Failed to save picks: {e}")
+
+        # Export results tracking data if results were updated
+        if results_summary and results_summary.get('updated_count', 0) > 0:
+            try:
+                tracker = PickTracker(db_path=db_path)
+                # Export tracking data with recent results
+                tracking_csv = tracker.export_to_csv(days=30)
+                tracking_json = tracker.export_to_json(days=30)
+                logger.info(f"Saved results tracking to {tracking_csv} and {tracking_json}")
+            except Exception as e:
+                logger.error(f"Failed to save results tracking: {e}")
+
+        # Send to Discord if configured
+        if recommendations:
+            discord_webhook = config.get('output.discord_webhook', '')
+            if discord_webhook:
+                try:
+                    notifier = DiscordNotifier(discord_webhook)
+                    # Use compact format for Discord
+                    compact_report = formatter.format_daily_picks(recommendations, games, quality_report, compact=True)
+                    notifier.send_picks(compact_report)
+                except Exception as e:
+                    logger.error(f"Failed to send Discord notification: {e}")
+
+            # Send to Telegram if configured
+            telegram_token = config.get('output.telegram_token', '') or os.environ.get('TELEGRAM_TOKEN', '')
+            telegram_chat_id = config.get('output.telegram_chat_id', '') or os.environ.get('TELEGRAM_CHAT_ID', '')
+            if telegram_token and telegram_chat_id:
+                try:
+                    tg = TelegramNotifier(bot_token=telegram_token, chat_id=telegram_chat_id)
+                    tg.send_picks(sorted(recommendations, key=lambda r: r.ev, reverse=True)[:3], quality_report, games)
+                except Exception as e:
+                    logger.error(f"Failed to send Telegram notification: {e}")
+
+
+        logger.info(f"Analysis complete. Found {len(recommendations)} +EV bets.")
+
+    except Exception as e:
+        logger.error(f"Error during analysis: {e}", exc_info=True)
+        return 1
+
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

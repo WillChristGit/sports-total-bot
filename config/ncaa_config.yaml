@@ -1,0 +1,66 @@
+# NCAA Basketball Configuration
+
+# NCAA plays differently than NBA - adjust model parameters accordingly
+
+ncaab:
+  name: "NCAA Men's Basketball"
+  api_key: "basketball_ncaab"  # The Odds API sport key
+
+  # Model parameters - NCAA has higher variance
+  model:
+    # NCAA plays faster pace than NBA
+    pace_weight: 1.0
+    pace_factor: 72.0  # Average NCAA pace (possessions per game)
+
+    # Offensive/defensive efficiency weights
+    offense_weight: 0.5
+    defense_weight: 0.5
+
+    # NCAA has fewer games, so we use shorter lookback
+    recent_games: 8  # Fewer games than NBA (30-game season)
+
+    # Variance is higher in college basketball
+    variance_multiplier: 1.3  # 30% more variance than NBA
+
+    # Home court advantage varies widely in college
+    # Power 5 teams have huge home court, mid-majors less so
+    home_court_advantage: 3.5
+
+    # Confidence thresholds
+    min_confidence: 0.52  # Slightly lower due to less data
+    min_ev_threshold: 0.03  # 3% EV minimum (NCAA lines can be softer)
+
+  # Season settings
+  season:
+    start_month: 11  # November
+    end_month: 4     # April (tournament)
+    tournament_start: "2026-03-17"  # Approximate tournament start
+
+  # Data settings
+  data:
+    cache_dir: "data/cache/ncaa"
+    stats_cache_hours: 48  # Cache stats for 48 hours (less frequent than NBA)
+
+  # NCAA-specific adjustments
+  adjustments:
+    # Tournament games are different - more intensity, neutral courts
+    tournament_mode:
+      enabled: false  # Auto-detect tournament time
+      home_court_reduction: 0.5  # Home court matters less in tournament
+      variance_increase: 0.2     # More variance in tournament
+
+    # Conference play intensity
+    conference_play:
+      enabled: true
+      intensity_multiplier: 1.1  # Conference games more competitive
+
+    # Roster turnover impact (new players every year)
+    roster_turnover:
+      early_season_penalty: 2.0  # Points to subtract in Nov/Dec
+      stabilization_games: 10    # Games needed for team to gel
+
+  # Output settings
+  output:
+    prefix: "🏀 NCAAB"  # Prefix for Telegram/console output
+    separate_picks_file: true    # Use separate picks file
+    picks_dir: "data/picks/ncaa"

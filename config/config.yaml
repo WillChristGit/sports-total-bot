@@ -1,0 +1,83 @@
+# SportsTotalBot Configuration
+
+# API Keys
+api_keys:
+  # Get free API key at: https://the-odds-api.com/
+  the_odds_api: "c09a8b422200e71fa8b64e62a705f6a2"
+
+  # NBA API (free, no key needed for basic)
+  api_nba: ""
+
+  # Optional: RapidAPI key for additional sources
+  rapid_api: ""
+
+# Bot Settings
+bot:
+  name: "SportsTotalBot"
+  version: "1.0.0"
+  log_level: "INFO"
+
+# Analysis Settings
+analysis:
+  # Minimum EV threshold to recommend a bet
+  min_ev_threshold: 0.02  # 2% positive EV
+
+  # Minimum confidence level (0-1)
+  min_confidence: 0.55
+
+  # Number of recent games to consider for form
+  recent_games: 10
+
+  # Home court advantage points
+  home_court_advantage: 3.0
+
+  # Market efficiency factor (0.0 - 1.0)
+  # NBA markets are HIGHLY efficient. Sportsbooks don't leave free money.
+  # 0.25 = model gets 25% weight, sharp market gets 75% weight
+  # This is REALISTIC - if you're seeing 25% EV, the model is broken
+  market_efficiency_factor: 0.25  # Base factor (25% of model edge)
+
+  # Win probability clamping range
+  # Keeps predictions realistic. Nobody has 70% edge on totals.
+  min_win_probability: 0.42  # Minimum win probability (42%)
+  max_win_probability: 0.58  # Maximum win probability (58%)
+
+# Output Settings
+output:
+  # Where to save picks
+  picks_file: "data/picks/daily_picks.csv"
+
+  # Where to save results
+  results_file: "data/picks/results.csv"
+
+  # Console output verbosity
+  verbose: true
+
+  # Optional: Discord webhook for notifications
+  discord_webhook: ""
+
+  # Optional: Telegram bot token
+  telegram_token: ""
+  telegram_chat_id: ""
+
+# Sports to analyze
+sports:
+  - "nba"
+  - "ncaab"  # NCAA Men's Basketball
+  # Future: "wnba", "nfl", "mlb", "nhl"
+
+# Schedule Settings
+schedule:
+  # Times to run daily (24-hour format)
+  run_times:
+    - "09:00"   # Early morning odds check
+    - "12:00"   # Midday update
+    - "17:00"   # Evening lock check
+
+  # Timezone
+  timezone: "America/New_York"
+
+# Database Settings
+database:
+  type: "sqlite"
+  path: "data/sportstotalbot.db"

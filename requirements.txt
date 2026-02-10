@@ -1,0 +1,34 @@
+# SportsTotalBot Requirements - Lightweight Version
+
+# HTTP requests
+requests>=2.31.0
+
+# Configuration
+pyyaml>=6.0
+python-dotenv>=1.0.0
+
+# Scheduling
+schedule>=1.2.0
+
+# Date/time
+python-dateutil>=2.8.2
+
+# Web scraping (backup)
+beautifulsoup4>=4.12.0
+
+# Logging
+colorlog>=6.8.0
+
+# Web dashboard (optional)
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# LLM Clients for RLM
+anthropic>=0.40.0  # Claude API (optional, for Claude provider)
+
+# OpenAI SDK (optional, for OpenAI provider)
+# openai>=1.0.0
