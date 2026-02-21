@@ -56,6 +56,8 @@ class TeamStatsWithQuality:
     tov_pct: float = 0.135
     orb_pct: float = 0.260
     ft_rate: float = 0.210
+    games_played: int = 0
+    last_5_points_scored: List[float] = field(default_factory=list)
 
     # Quality metadata
     data_source: DataSource = DataSource.LEAGUE_AVG
@@ -145,6 +147,9 @@ class MultiSourceStatsFetcher:
         self.alternative_fetcher = AlternativeStatsFetcher(
             sportsdataio_key=sportsdataio_key
         )
+
+        # Shared NBA cache used for last-5-games lookups (reused across calls)
+        self._nba_cache = NBAStatsCache(cache_dir=str(self.cache_dir))
 
     def _build_team_mappings(self) -> Dict[str, int]:
         """Build team name to ID mappings"""
@@ -253,11 +258,13 @@ class MultiSourceStatsFetcher:
         # Try NBA.com API first
         stats = self._try_nba_com_stats(normalized_name)
         if stats:
+            stats.last_5_points_scored = self._fetch_last_5(normalized_name)
             return stats
 
         # Try alternative sources (when NBA.com is blocked)
         stats = self._try_alternative_sources(normalized_name)
         if stats:
+            stats.last_5_points_scored = self._fetch_last_5(normalized_name)
             return stats
 
         # Try NBAStatsCache (uses cached data with calculated metrics)
@@ -284,7 +291,7 @@ class MultiSourceStatsFetcher:
                     quality = DataQuality.GOOD
                     self.quality_report.good_quality += 1
 
-                return TeamStatsWithQuality(
+                result = TeamStatsWithQuality(
                     team_name=normalized_name,
                     points_per_game=cached_stats.get('avg_points_scored', self.LEAGUE_AVERAGES['points_per_game']),
                     opp_points_per_game=cached_stats.get('avg_points_allowed', self.LEAGUE_AVERAGES['opp_points_per_game']),
@@ -295,11 +302,14 @@ class MultiSourceStatsFetcher:
                     tov_pct=cached_stats.get('tov_pct', self.LEAGUE_AVERAGES['tov_pct']),
                     orb_pct=cached_stats.get('orb_pct', self.LEAGUE_AVERAGES['orb_pct']),
                     ft_rate=cached_stats.get('ft_rate', self.LEAGUE_AVERAGES['ft_rate']),
+                    games_played=cached_stats.get('games_played', 0),
+                    last_5_points_scored=self._fetch_last_5(normalized_name),
                     data_source=DataSource.CACHED,
                     data_quality=quality,
                     fetch_time=datetime.now(),
                     is_fallback=(age_hours >= 24 if 'age_hours' in locals() else False)
                 )
+                return result
         except Exception as e:
             logger.debug(f"NBAStatsCache failed for {team_name}: {e}")
 
@@ -406,6 +416,7 @@ class MultiSourceStatsFetcher:
                             tov_pct=team_dict.get('TOV_PCT', self.LEAGUE_AVERAGES['tov_pct']),
                             orb_pct=team_dict.get('OREB_PCT', self.LEAGUE_AVERAGES['orb_pct']),
                             ft_rate=team_dict.get('FTA_RATE', self.LEAGUE_AVERAGES['ft_rate']),
+                            games_played=team_dict.get('GP', 0),
                             data_source=DataSource.NBA_COM,
                             data_quality=DataQuality.EXCELLENT,
                             fetch_time=datetime.now(),
@@ -542,6 +553,14 @@ class MultiSourceStatsFetcher:
 
         except Exception as e:
             logger.warning(f"Failed to save cache for {stats.team_name}: {e}")
+
+    def _fetch_last_5(self, team_name: str) -> List[float]:
+        """Fetch last 5 game scores via the shared NBA cache (uses cached game log)."""
+        try:
+            return self._nba_cache.get_team_last_5_games(team_name)
+        except Exception as e:
+            logger.debug(f"Could not fetch last 5 games for {team_name}: {e}")
+            return []
 
     def get_quality_report(self) -> DataQualityReport:
         """Get the data quality report for this run"""

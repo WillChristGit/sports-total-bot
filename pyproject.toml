@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "sports-total-bot"
+version = "2.0.0"
+description = "AI-powered sports betting analysis bot (NBA totals & spreads)"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "schedule>=1.2.0",
+    "python-dateutil>=2.8.2",
+    "beautifulsoup4>=4.12.0",
+    "colorlog>=6.8.0",
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.4.0", "pytest-cov>=4.1.0"]
+llm  = ["anthropic>=0.40.0"]
+
+[project.scripts]
+sports-bot = "main_v2:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "scripts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

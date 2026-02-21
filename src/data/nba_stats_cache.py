@@ -385,8 +385,8 @@ class NBAStatsFetcher:
 
     def get_team_last_5_games(self, team_name: str) -> List[float]:
         """
-        Get points scored in last 5 games
-        Returns list of points scored in recent games
+        Get points scored in last 5 games from the team game log.
+        Returns scores in descending date order (most recent first).
         """
         normalized_name = self.normalize_team_name(team_name)
         team_id = self.team_name_to_id.get(normalized_name)
@@ -394,20 +394,27 @@ class NBAStatsFetcher:
         if not team_id:
             return []
 
-        # Use score endpoint to get recent games
-        url = "https://stats.nba.com/stats/leaguedashteamstats"
+        url = "https://stats.nba.com/stats/teamgamelog"
         params = {
+            "TeamID": team_id,
             "LeagueID": "00",
             "Season": get_current_nba_season(),
             "SeasonType": "Regular Season",
-            "MeasureType": "Base",
-            "PerMode": "PerGame",
-            "LastNGames": "5",
+            "Sorter": "DATE",
         }
 
-        # This is simplified - in production you'd use the game log endpoint
-        # For now, return empty and let model use season averages
-        return []
+        data = self._make_request(url, params, max_age_hours=6)
+        if not data or 'resultSets' not in data:
+            return []
+
+        try:
+            headers = data['resultSets'][0]['headers']
+            rows = data['resultSets'][0]['rowSet']
+            pts_idx = headers.index('PTS')
+            return [float(row[pts_idx]) for row in rows[:5]]
+        except Exception as e:
+            logger.debug(f"Failed to parse last 5 games for {team_name}: {e}")
+            return []
 
     def get_team_schedule(self, team_name: str) -> dict:
         """
