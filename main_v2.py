@@ -304,10 +304,9 @@ def parse_odds_api_response(raw_data: list, sport: SportType = SportType.NBA) ->
 
 def create_enhanced_team_stats(team_name: str, stats_cache: NBAStatsCache) -> AdvancedTeamStats:
     """
-    Create enhanced team stats using real NBA data
-    Falls back to league averages if data unavailable
+    Create enhanced team stats using real NBA data.
+    Falls back to league averages if data unavailable.
     """
-    # Get real stats from NBA.com
     real_stats = stats_cache.get_team_stats(team_name)
 
     if real_stats:
@@ -324,17 +323,17 @@ def create_enhanced_team_stats(team_name: str, stats_cache: NBAStatsCache) -> Ad
             orb_pct=real_stats.get('orb_pct', 0.260),
             ft_rate=real_stats.get('ft_rate', 0.210),
             pace=real_stats['pace'],
-            last_5_points_scored=[],  # Would fetch from game log
+            last_5_points_scored=stats_cache.get_team_last_5_games(team_name),
             last_5_points_allowed=[]
         )
     else:
-        # Fallback to league averages (2024-25 NBA averages)
+        # Fallback to league averages (2025-26 NBA averages)
         logging.getLogger(__name__).warning(f"Using league averages for {team_name}")
         return AdvancedTeamStats(
             team_id=team_name[:3].upper(),
             team_name=team_name,
-            games_played=50,
-            avg_points_scored=112.5,  # 2024-25 league avg
+            games_played=0,
+            avg_points_scored=112.5,
             avg_points_allowed=112.5,
             offensive_rating=114.0,
             defensive_rating=114.0,
@@ -342,7 +341,7 @@ def create_enhanced_team_stats(team_name: str, stats_cache: NBAStatsCache) -> Ad
             tov_pct=0.135,
             orb_pct=0.260,
             ft_rate=0.210,
-            pace=99.5,  # 2024-25 league avg pace
+            pace=99.5,
             last_5_points_scored=[],
             last_5_points_allowed=[]
         )
